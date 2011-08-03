@@ -65,3 +65,6 @@ def test_rsa_sha256():
 
 def test_sign():
     jwt._sign({}, b"test", alg=u'RS256', key=jwt.rsa_load("rsakey.pem"))
+
+    assert_raises(jwt.UnknownAlgorithm,
+        lambda: jwt._sign({}, b"test", alg=u'foobar', key=None))

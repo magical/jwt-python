@@ -61,17 +61,36 @@ def safe_str_cmp(a, b):
 def sha256_digest(msg):
     return hashlib.sha256(msg).digest()
 
-def verify_rsa_sha256(msg, sig, key):
-    return key.verify(sha256_digest(msg), sig, 'sha256')
+class Signer(object):
+    """Abstract base class for signing algorithms."""
+    def sign(msg, key):
+        raise NotImplementedError
 
-def verify_hmac_sha256(msg, sig, key):
-    h = hmac.new(key, msg, digestmod=hashlib.sha256)
-    return safe_str_cmp(h.digest(), sig)
+    def verify(msg, sig, key):
+        raise NotImplementedError
 
+class HMACSigner(Signer):
+    def __init__(self, digest):
+        self.digest = digest
+
+    def verify(self, msg, sig, key):
+        h = hmac.new(key, msg, digestmod=self.digest)
+        return safe_str_cmp(h.digest(), sig)
+
+class RSASigner(Signer):
+    def __init__(self, algo, digest):
+        self.algo = algo
+        self.digest = digest
+
+    def sign(self, msg, key):
+        return key.sign(self.digest(msg), self.algo)
+
+    def verify(self, msg, sig, key):
+        return key.verify(self.digest(msg), sig, self.algo)
 
 ALGS = {
-    'HS256': verify_hmac_sha256,
-    'RS256': verify_rsa_sha256,
+    'HS256': HMACSigner(hashlib.sha256),
+    'RS256': RSASigner('sha256', sha256_digest),
 }
 
 def check(token, key):
@@ -97,14 +116,15 @@ def check(token, key):
 
     verifier = ALGS[alg]
 
-    return verifier(sigdata, crypto, key)
+    return verifier.verify(sigdata, crypto, key)
 
 
 def _sign(header, payload, alg, key):
     if u"alg" in header:
         raise ValueError("alg present", header)
 
-    assert alg == u"RS256"
+    if not alg in ALGS:
+        raise UnknownAlgorithm(alg)
 
     header[u"alg"] = alg
 
@@ -112,10 +132,12 @@ def _sign(header, payload, alg, key):
     payload_b64 = b64e(payload)
 
     token = header_b64 + b"." + payload_b64
-    sig = key.sign(sha256_digest(token), 'sha256')
+
+    signer = ALGS[alg]
+    sig = signer.sign(token, key)
     sig_b64 = b64e(sig)
 
-    return token + b"." + sig_b64
+    return sig_b64
 
 
 def rsa_load(filename):
