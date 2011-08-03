@@ -8,6 +8,7 @@ import M2Crypto
 import hashlib
 import hmac
 
+from struct import pack
 from itertools import izip
 
 KNOWN_TYPS = (u"JWT", u"http://openid.net/specs/jwt/1.0")
@@ -61,6 +62,10 @@ def safe_str_cmp(a, b):
 def sha256_digest(msg):
     return hashlib.sha256(msg).digest()
 
+def mpint(b):
+    b = b"\x00" + b
+    return pack(">L", len(b)) + b
+
 class Signer(object):
     """Abstract base class for signing algorithms."""
     def sign(msg, key):
@@ -88,9 +93,20 @@ class RSASigner(Signer):
     def verify(self, msg, sig, key):
         return key.verify(self.digest(msg), sig, self.algo)
 
+class ECDSASigner(Signer):
+    def __init__(self, digest):
+        self.digest = digest
+
+    def verify(self, msg, sig, key):
+        half = len(sig) // 2
+        r = mpint(sig[:half])
+        s = mpint(sig[half:])
+        return key.verify_dsa(self.digest(msg), r, s)
+
 ALGS = {
     'HS256': HMACSigner(hashlib.sha256),
     'RS256': RSASigner('sha256', sha256_digest),
+    'ES256': ECDSASigner(sha256_digest),
 }
 
 def check(token, key):
@@ -147,3 +163,6 @@ def rsa_load(filename):
 def rsa_loads(key):
     """Read a PEM-encoded RSA key pair from a string."""
     return M2Crypto.RSA.load_key_str(key, M2Crypto.util.no_passphrase_callback)
+
+def ec_load(filename):
+    return M2Crypto.EC.load_key(filename, M2Crypto.util.no_passphrase_callback)
