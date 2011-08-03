@@ -4,6 +4,7 @@ import base64
 import json
 import re
 
+import M2Crypto
 import hashlib
 import hmac
 
@@ -57,9 +58,11 @@ def safe_str_cmp(a, b):
         r |= ord(c) ^ ord(d)
     return r == 0
 
+def sha256_digest(msg):
+    return hashlib.sha256(msg).digest()
+
 def verify_rsa_sha256(msg, sig, key):
-    h = hashlib.sha256(msg).digest()
-    return key.verify(h, sig, 'sha256')
+    return key.verify(sha256_digest(msg), sig, 'sha256')
 
 def verify_hmac_sha256(msg, sig, key):
     h = hmac.new(key, msg, digestmod=hashlib.sha256)
@@ -97,4 +100,28 @@ def check(token, key):
     return verifier(sigdata, crypto, key)
 
 
+def _sign(header, payload, alg, key):
+    if u"alg" in header:
+        raise ValueError("alg present", header)
 
+    assert alg == u"RS256"
+
+    header[u"alg"] = alg
+
+    header_b64 = b64e(json.dumps(header))
+    payload_b64 = b64e(payload)
+
+    token = header_b64 + b"." + payload_b64
+    sig = key.sign(sha256_digest(token), 'sha256')
+    sig_b64 = b64e(sig)
+
+    return token + b"." + sig_b64
+
+
+def rsa_load(filename):
+    """Read a PEM-encoded RSA key pair from a file."""
+    return M2Crypto.RSA.load_key(filename, M2Crypto.util.no_passphrase_callback)
+
+def rsa_loads(key):
+    """Read a PEM-encoded RSA key pair from a string."""
+    return M2Crypto.RSA.load_key_str(key, M2Crypto.util.no_passphrase_callback)
