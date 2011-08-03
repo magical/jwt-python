@@ -46,25 +46,15 @@ def test_hmac_sha256():
     assert jwt.check(b"eyJ0eXAiOiJKV1QiLA0KICJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk", key)
 
 def test_rsa_sha256():
-    import M2Crypto.RSA
-    from struct import pack
-
-    def mpint(b):
-        b = "\x00" + bytes(b)
-        return pack(">L", len(b)) + b
-
-    def rsa_key(n, e):
-        return M2Crypto.RSA.new_pub_key((mpint(e), mpint(n)))
-
-    n = [161, 248, 22, 10, 226, 227, 201, 180, 101, 206, 141, 45, 101, 98, 99, 54, 43, 146, 125, 190, 41, 225, 240, 36, 119, 252, 22, 37, 204, 144, 161, 54, 227, 139, 217, 52, 151, 197, 182, 234, 99, 221, 119, 17, 230, 124, 116, 41, 249, 86, 176, 251, 138, 143, 8, 154, 220, 75, 105, 137, 60, 193, 51, 63, 83, 237, 208, 25, 184, 119, 132, 37, 47, 236, 145, 79, 228, 133, 119, 105, 89, 75, 234, 66, 128, 211, 44, 15, 85, 191, 98, 148, 79, 19, 3, 150, 188, 110, 155, 223, 110, 189, 210, 189, 163, 103, 142, 236, 160, 198, 104, 247, 1, 179, 141, 191, 251, 56, 200, 52, 44, 226, 254, 109, 39, 250, 222, 74, 90, 72, 116, 151, 157, 212, 185, 207, 154, 222, 196, 199, 91, 5, 133, 44, 44, 15, 94, 248, 165, 193, 117, 3, 146, 249, 68, 232, 237, 100, 193, 16, 198, 182, 71, 96, 154, 164, 120, 58, 235, 156, 108, 154, 215, 85, 49, 48, 80, 99, 139, 131, 102, 92, 111, 111, 122, 130, 163, 150, 112, 42, 31, 100, 27, 130, 211, 235, 242, 57, 34, 25, 73, 31, 182, 134, 135, 44, 87, 22, 245, 10, 248, 53, 141, 154, 139, 157, 23, 195, 64, 114, 143, 127, 135, 216, 154, 24, 216, 252, 171, 103, 173, 132, 89, 12, 46, 207, 117, 147, 57, 54, 60, 7, 3, 77, 111, 96, 111, 158, 33, 224, 84, 86, 202, 229, 233, 161]
-    e = [1, 0, 1]
-    key = rsa_key(n, e)
+    key = jwt.rsa_load("rsakey.pem")
 
     assert jwt.check(b"eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.cC4hiUPoj9Eetdgtv3hF80EGrhuB__dzERat0XF9g2VtQgr9PJbu3XOiZj5RZmh7AAuHIm4Bh-0Qc_lF5YKt_O8W2Fp5jujGbds9uJdbF9CUAr7t1dnZcAcQjbKBYNX4BAynRFdiuB--f_nZLgrnbyTyWzO75vRK5h6xBArLIARNPvkSjtQBMHlb1L07Qe7K0GarZRmB_eSN9383LcOLn6_dO--xi12jzDwusC-eOkHWEsqtFZESc6BfI7noOPqvhJ1phCnvWh6IeYI2w9QOYEUipUTI8np6LbgGY9Fs98rqVt5AXLIhWkWywlVmtVrBp0igcN_IoypGlUPQGe77Rw", key)
 
 
 def test_sign():
-    jwt._sign({}, b"test", alg=u'RS256', key=jwt.rsa_load("rsakey.pem"))
+    key = jwt.rsa_load("rsakey.pem")
+
+    assert jwt._sign({}, b"test", alg=u'RS256', key=key) == b'A_D3oXlHQLD9NQGL7DSE5IzMRlEhhr1FCZoMKSkpvTokmax9tdQTR7oSyyrlEsHzJvhBMMCU9nCXEv6Xj8TiNRn69X76UsfMnhz0-a6mVVURXe_GB60WH-T9j-WBdP9fvnJkvDcJycVzvBUWct0lX9A0yZJiFTAjyHvhbsmu9wTM8GmSkmOGCqaT6DSFUtUjsqNyEqlFSqhTsMrL3oTchr4nk5p8N-EqfR3b1kKzuPhmcfdsC9PcskDEfg7WJrYFVpW78L5TyJ6iLIa8GEdZIDz9bVO47xI8TKU5WKTzJ4zdI1DFobqds7BNeLIPxvAnDcyC1WDcBc5Lt5ZC3zIrMQ'
 
     assert_raises(jwt.UnknownAlgorithm,
         lambda: jwt._sign({}, b"test", alg=u'foobar', key=None))
