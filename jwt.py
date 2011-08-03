@@ -62,25 +62,30 @@ def safe_str_cmp(a, b):
 def sha256_digest(msg):
     return hashlib.sha256(msg).digest()
 
+def sha384_digest(msg):
+    return hashlib.sha384(msg).digest()
+
 def mpint(b):
     b = b"\x00" + b
     return pack(">L", len(b)) + b
 
 class Signer(object):
     """Abstract base class for signing algorithms."""
-    def sign(msg, key):
+    def sign(self, msg, key):
         raise NotImplementedError
 
-    def verify(msg, sig, key):
+    def verify(self, msg, sig, key):
         raise NotImplementedError
 
 class HMACSigner(Signer):
     def __init__(self, digest):
         self.digest = digest
 
+    def sign(self, msg, key):
+        return hmac.new(key, msg, digestmod=self.digest).digest()
+
     def verify(self, msg, sig, key):
-        h = hmac.new(key, msg, digestmod=self.digest)
-        return safe_str_cmp(h.digest(), sig)
+        return safe_str_cmp(self.sign(msg, key), sig)
 
 class RSASigner(Signer):
     def __init__(self, algo, digest):
@@ -106,6 +111,7 @@ class ECDSASigner(Signer):
 ALGS = {
     'HS256': HMACSigner(hashlib.sha256),
     'RS256': RSASigner('sha256', sha256_digest),
+    'RS384': RSASigner('sha384', sha384_digest),
     'ES256': ECDSASigner(sha256_digest),
 }
 
@@ -135,16 +141,20 @@ def check(token, key):
     return verifier.verify(sigdata, crypto, key)
 
 
-def _sign(header, payload, alg, key):
-    if u"alg" in header:
-        raise ValueError("alg present", header)
+def _sign(alg, header, payload, key):
+    """Internal function.
+
+    Sign a header and payload with a given algorithm.
+
+    Returns the signature.
+
+    The header data must already contain the correct alg value, as it is not
+    added or checked by this function."""
 
     if not alg in ALGS:
         raise UnknownAlgorithm(alg)
 
-    header[u"alg"] = alg
-
-    header_b64 = b64e(json.dumps(header))
+    header_b64 = b64e(header)
     payload_b64 = b64e(payload)
 
     token = header_b64 + b"." + payload_b64
