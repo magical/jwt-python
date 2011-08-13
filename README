@@ -1,0 +1,4 @@
+This project implements the JSON Web Token and JSON Web Signature draft specifications.
+
+http://self-issued.info/docs/draft-jones-json-web-token-05.html
+http://self-issued.info/docs/draft-jones-json-web-signature-02.html
