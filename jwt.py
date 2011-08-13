@@ -89,9 +89,19 @@ def sha256_digest(msg):
 def sha384_digest(msg):
     return hashlib.sha384(msg).digest()
 
+def sha512_digest(msg):
+    return hashlib.sha512(msg).digest()
+
 def mpint(b):
     b = b"\x00" + b
     return pack(">L", len(b)) + b
+
+def mp2bin(b):
+    # just ignore the length...
+    if b[4] == '\x00':
+        return b[5:]
+    else:
+        return b[4:]
 
 class Signer(object):
     """Abstract base class for signing algorithms."""
@@ -112,13 +122,13 @@ class HMACSigner(Signer):
 
     def verify(self, msg, sig, key):
         if not safe_str_cmp(self.sign(msg, key), sig):
-            raise BadSignature(sig)
+            raise BadSignature(repr(sig))
         return
 
 class RSASigner(Signer):
-    def __init__(self, algo, digest):
-        self.algo = algo
+    def __init__(self, digest, algo):
         self.digest = digest
+        self.algo = algo
 
     def sign(self, msg, key):
         return key.sign(self.digest(msg), self.algo)
@@ -132,6 +142,10 @@ class RSASigner(Signer):
 class ECDSASigner(Signer):
     def __init__(self, digest):
         self.digest = digest
+
+    def sign(self, msg, key):
+        r, s = key.sign_dsa(self.digest(msg))
+        return mp2bin(r).rjust(32, '\x00') + mp2bin(s).rjust(32, '\x00')
 
     def verify(self, msg, sig, key):
         # XXX check sig length
@@ -147,10 +161,15 @@ class ECDSASigner(Signer):
                 raise BadSignature
 
 ALGS = {
-    'HS256': HMACSigner(hashlib.sha256),
-    'RS256': RSASigner('sha256', sha256_digest),
-    'RS384': RSASigner('sha384', sha384_digest),
-    'ES256': ECDSASigner(sha256_digest),
+    u'HS256': HMACSigner(hashlib.sha256),
+    u'HS384': HMACSigner(hashlib.sha384),
+    u'HS512': HMACSigner(hashlib.sha512),
+
+    u'RS256': RSASigner(sha256_digest, 'sha256'),
+    u'RS384': RSASigner(sha384_digest, 'sha384'),
+    u'RS512': RSASigner(sha512_digest, 'sha512'),
+
+    u'ES256': ECDSASigner(sha256_digest),
 }
 
 def verify(token, key):
@@ -186,29 +205,28 @@ def check(token, key):
     except Invalid:
         return False
 
-def _sign(alg, header, payload, key):
-    """Internal function.
+def sign(alg, payload, key):
+    """Sign the payload with the given algorithm and key.
 
-    Sign a header and payload with a given algorithm.
+    The payload can be any JSON-dumpable object.
 
-    Returns the signature.
+    Returns a token string."""
 
-    The header data must already contain the correct alg value, as it is not
-    added or checked by this function."""
-
-    if not alg in ALGS:
+    if alg not in ALGS:
         raise UnknownAlgorithm(alg)
 
-    header_b64 = b64e(header)
+    header = {u'alg': alg}
+    signer = ALGS[alg]
+
+    header_b64 = b64e(json.dumps(header, separators=(",", ":")))
     payload_b64 = b64e(payload)
 
     token = header_b64 + b"." + payload_b64
 
-    signer = ALGS[alg]
     sig = signer.sign(token, key)
-    sig_b64 = b64e(sig)
+    token += b"." + b64e(sig)
 
-    return sig_b64
+    return token
 
 
 def rsa_load(filename):
