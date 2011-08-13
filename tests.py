@@ -12,45 +12,54 @@ def bytes(b):
 
 
 def test():
+    # miscellaneous tests
+
     assert_raises(TypeError, lambda: jwt.check(u"unicode string", b""))
+    # {"typ":"foo"}
+    assert_raises(jwt.BadType, lambda: jwt.verify(b"eyJ0eXAiOiJmb28ifQ..", None))
 
 def test_split():
     # too few/many dots
-    assert_raises(ValueError, lambda: jwt.split_token(b""))
-    assert_raises(ValueError, lambda: jwt.split_token(b"a.b"))
-    assert_raises(ValueError, lambda: jwt.split_token(b"a.b.c.d"))
+    assert_raises(jwt.BadSyntax, lambda: jwt.split_token(b""))
+    assert_raises(jwt.BadSyntax, lambda: jwt.split_token(b"a.b"))
+    assert_raises(jwt.BadSyntax, lambda: jwt.split_token(b"a.b.c.d"))
 
+    assert jwt.split_token(b"a.b.c") == (b"a", b"b", b"c")
+
+    # XXX should empty segments be allowed?
     jwt.split_token(b"..")
 
 def test_b64():
     # invalid chars
-    assert_raises(ValueError, lambda: jwt.b64d(b"!&#$%"))
-    assert_raises(ValueError, lambda: jwt.b64d(b"AAA A"))
-    assert_raises(ValueError, lambda: jwt.b64d(b"   AAAA   "))
+    assert_raises(jwt.BadSyntax, lambda: jwt.b64d(b"!&#$%"))
+    assert_raises(jwt.BadSyntax, lambda: jwt.b64d(b"AAA A"))
+    assert_raises(jwt.BadSyntax, lambda: jwt.b64d(b"   AAAA   "))
 
     # implicit padding
-    jwt.b64d(b"AAAA")
-    jwt.b64d(b"AAA")
-    jwt.b64d(b"AA")
+    assert jwt.b64d(b"AAAA") == b"\x00\x00\x00"
+    assert jwt.b64d(b"AAA") == b"\x00\x00"
+    assert jwt.b64d(b"AA") == b"\x00"
 
     # explicit padding
-    assert_raises(ValueError, lambda: jwt.b64d(b"AA=="))
-    assert_raises(ValueError, lambda: jwt.b64d(b"AAA="))
+    assert_raises(jwt.BadSyntax, lambda: jwt.b64d(b"AA=="))
+    assert_raises(jwt.BadSyntax, lambda: jwt.b64d(b"AAA="))
 
     # invalid length
-    assert_raises(ValueError, lambda: jwt.b64d(b"A"))
+    assert_raises(jwt.BadSyntax, lambda: jwt.b64d(b"A"))
 
 def test_hmac_sha256():
     key = bytes([3, 35, 53, 75, 43, 15, 165, 188, 131, 126, 6, 101, 119, 123, 166, 143, 90, 179, 40, 230, 240, 84, 201, 40, 169, 15, 132, 178, 210, 80, 46, 191, 211, 251, 90, 146, 210, 6, 71, 239, 150, 138, 180, 195, 119, 98, 61, 34, 61, 46, 33, 114, 5, 46, 79, 8, 192, 205, 154, 245, 103, 208, 128, 163])
 
     # Example from the JWS spec
     assert jwt.check(b"eyJ0eXAiOiJKV1QiLA0KICJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk", key)
+    assert not jwt.check(b"eyJ0eXAiOiJKV1QiLA0KICJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", key)
 
 def test_check_rsa():
     key = jwt.rsa_load("rsakey.pem")
 
-    # Example from the JWS spec
+    # Example from the JWS spec; RSA SHA-256
     assert jwt.check(b"eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.cC4hiUPoj9Eetdgtv3hF80EGrhuB__dzERat0XF9g2VtQgr9PJbu3XOiZj5RZmh7AAuHIm4Bh-0Qc_lF5YKt_O8W2Fp5jujGbds9uJdbF9CUAr7t1dnZcAcQjbKBYNX4BAynRFdiuB--f_nZLgrnbyTyWzO75vRK5h6xBArLIARNPvkSjtQBMHlb1L07Qe7K0GarZRmB_eSN9383LcOLn6_dO--xi12jzDwusC-eOkHWEsqtFZESc6BfI7noOPqvhJ1phCnvWh6IeYI2w9QOYEUipUTI8np6LbgGY9Fs98rqVt5AXLIhWkWywlVmtVrBp0igcN_IoypGlUPQGe77Rw", key)
+    assert not jwt.check(b"eyJhbGciOiJSUzI1NiJ9.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.cC4hiUPoj9Eetdgtv3hF80EGrhuB__dzERat0XF9g2VtQgr9PJbu3XOiZj5RZmh7AAuHIm4Bh-0Qc_lF5YKt_O8W2Fp5jujGbds9uJdbF9CUAr7t1dnZcAcQjbKBYNX4BAynRFdiuB--f_nZLgrnbyTyWzO75vRK5h6xBArLIARNPvkSjtQBMHlb1L07Qe7K0GarZRmB_eSN9383LcOLn6_dO--xi12jzDwusC-eOkHWEsqtFZESc6BfI7noOPqvhJ1phCnvWh6IeYI2w9QOYEUipUTI8np6LbgGY9Fs98rqVt5AXLIhWkWywlVmtVrBp0igcN_IoypGlUPQGe77Rw", key)
 
     assert jwt.check(b"eyJhbGciOiJSUzM4NCJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.UqgNjrJOGhk4wfoSG6Uvrt9GcKu-TgPwInExALrMBadg1pol1uTw7mZADTddAWsC6ZzdFiTFUmIi7DuD38ftLAZoW4qezdAO7RYf1yZDsbT20bt8DJJN1I4VovL2PLg80B6x6ug-kaW8k5LaM5ce0dk1zgWhjafKC3Mb4UNLL8f9fqVMkHpdWYRjF6QjTz12Ap-gq-tPyUoWSdvzCIYOcZ9-08SQQdUTTgsNF1Qwu3TqeWPqzNJwmWHiHMmaV8I4ktMFEX-AiEBa55KsfYTx0jSbTHP-odqmnLQJ4n-oQJ2RSXy0HQP6BkdiwDHdoMUk4z_wAeOsfDTs_mLxTgOInQ", key)
 
@@ -59,6 +68,7 @@ def test_ecdsa_sha256():
 
     # Example from the JWS spec
     assert jwt.check(b"eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q", key)
+    assert not jwt.check(b"eyJhbGciOiJFUzI1NiJ9.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q", key)
 
 def test_sign():
     key = jwt.rsa_load("rsakey.pem")
