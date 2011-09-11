@@ -110,7 +110,7 @@ class Signer(object):
         raise NotImplementedError
 
     def verify(self, msg, sig, key):
-        """Return True if ``sig`` is a valid signature for ``msg``."""
+        """Raise BadSignature ``sig`` is not a valid signature for ``msg``."""
         raise NotImplementedError
 
 class HMACSigner(Signer):
@@ -196,7 +196,9 @@ def verify(token, key):
     verifier = ALGS[alg]
     verifier.verify(sigdata, crypto, key)
 
-    return
+    # XXX check expiry, etc
+
+    return json.loads(claim)
 
 def check(token, key):
     try:
